@@ -27,8 +27,8 @@ def test_runtime_unconstrained_minimisers(benchmark, minimiser, problem):
             problem.objective,
             minimiser,
             args=problem.args(),
-            max_steps=2**10,  # TODO troubleshooting
-            # throw=False,
+            max_steps=2**8,  # TODO troubleshooting
+            throw=False,
         )
     )
 

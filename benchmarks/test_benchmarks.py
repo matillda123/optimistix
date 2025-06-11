@@ -26,8 +26,7 @@ def test_runtime_unconstrained_minimisers(benchmark, minimiser, problem):
             optx.minimise,
             problem.objective,
             minimiser,
-            problem.y0(),
-            problem.args(),
+            args=problem.args(),
             max_steps=2**10,  # TODO troubleshooting
             # throw=False,
         )

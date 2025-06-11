@@ -1,8 +1,6 @@
 import functools as ft
 
-import equinox as eqx
 import jax
-import jax.tree_util as jtu
 import optimistix as optx
 import pytest
 import sif2jax
@@ -16,6 +14,7 @@ cutest = pytest.mark.skipif("not config.getoption('cutest')")
 
 # Benchmark solvers that are part of documented API.
 unconstrained_minimisers = (optx.BFGS(rtol=1e-3, atol=1e-6),)
+
 
 @cutest
 @pytest.mark.benchmark

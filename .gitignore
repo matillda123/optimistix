@@ -11,3 +11,4 @@ examples/data
 .venv
 .DS_Store
 .devcontainer
+.benchmarks

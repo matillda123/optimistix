@@ -44,9 +44,9 @@ def test_runtime_unconstrained_minimisers(benchmark, minimiser, problem):
 
     # Save information and results
     objective_value, result, num_steps = values
-    benchmark.extra_info["number of steps"] = num_steps
+    benchmark.extra_info["number of steps"] = int(num_steps)
     benchmark.extra_info["objective value"] = objective_value
-    benchmark.extra_info["result"] = result
+    benchmark.extra_info["result"] = bool(result == optx.RESULTS.successful)
     benchmark.extra_info["problem name"] = problem.__class__.__name__
     benchmark.extra_info["solver name"] = minimiser.__class__.__name__
 

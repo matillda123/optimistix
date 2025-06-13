@@ -17,6 +17,8 @@ benchmark results can be saved in a .json file. Additional custom metrics (e.g. 
 
 This will just run benchmarks on our own solvers - you can use saved results to compare performance to previous versions or different commits. Comparing against the last saved run is enabled with `pytest --benchmark-compare`, but specific iDs of previous runs may also be specified. (Consult the [documentation](https://pytest-benchmark.readthedocs.io/en/latest/) for more options.)
 
+For reproducibility, make sure that all your changes have been committed and your working tree is clean before running the benchmarks. `pytest-benchmark` will otherwise mark your benchmarking results as `dirty`. 
+
 **If you want to dive a little deeper**:
 Saved results include the commit, branch, version, and an exact timestamp by default.
 Note that benchmarks are run with `throw=False` enabled, since otherwise no result is written in the json file, but we do want to know if we failed to solve a problem.

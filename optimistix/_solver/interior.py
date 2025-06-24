@@ -16,6 +16,10 @@ from .._solution import RESULTS
 from .barrier import LogarithmicBarrier
 
 
+# TODO: Does the way our barrier parameters are specified affect the linear solve for
+# the bound multipliers of infinite bounds? I'm not confident that it does not.
+
+
 def _y_barrier__grad_operators(iterate, f_info):
     """Compute the gradients, primal dual Hessians, distance operators and the identity
     operators for the finite bound constraints.

@@ -68,6 +68,7 @@ from ._solver import (
     GoldenSectionSearch as GoldenSectionSearch,
     GradientDescent as GradientDescent,
     hestenes_stiefel as hestenes_stiefel,
+    Householder as Householder,
     InverseQuadraticInterpolation as InverseQuadraticInterpolation,
     IndirectDampedNewtonDescent as IndirectDampedNewtonDescent,
     IndirectLevenbergMarquardt as IndirectLevenbergMarquardt,

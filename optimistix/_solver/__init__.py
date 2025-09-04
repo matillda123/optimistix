@@ -21,6 +21,7 @@ from .gradient_methods import (
     GradientDescent as GradientDescent,
     SteepestDescent as SteepestDescent,
 )
+from .householder import Householder as Householder
 from .learning_rate import LearningRate as LearningRate
 from .levenberg_marquardt import (
     DampedNewtonDescent as DampedNewtonDescent,

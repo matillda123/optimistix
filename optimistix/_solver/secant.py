@@ -48,7 +48,7 @@ def _orthonormal_basis_for_pytree(pytree: PyTree[Array]) -> List[PyTree[Array]]:
     **Arguments**:
 
     - `pytree`: A pytree such that the output of `_orthonormal_basis_for_pytree` is a list of orthonormal 
-    pytress of the same structure as `pytree`.
+    pytrees of the same structure as `pytree`.
 
     **Returns**:
     A list of basis-pytrees which span the current pytree-space.

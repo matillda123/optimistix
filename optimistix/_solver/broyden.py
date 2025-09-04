@@ -1,5 +1,5 @@
 from collections.abc import Callable
-from typing import Any, Generic, TYPE_CHECKING
+from typing import Any, Generic, TYPE_CHECKING, List
 
 import equinox as eqx
 import jax
@@ -16,8 +16,7 @@ else:
 from equinox.internal import ω
 from jaxtyping import Array, Bool, PyTree, Scalar
 
-# the semipositive definite tag in _identity_pytree is wrong, but unused. So its fine to import it.
-from .quasi_newton import _outer, _identity_pytree
+from .quasi_newton import _outer
 
 from .._custom_types import Aux, Fn, Out, Y
 from .._misc import cauchy_termination, max_norm, tree_dtype, tree_full_like, tree_dot
@@ -33,9 +32,57 @@ from .._search import FunctionInfo
 
 
 
+def _generalized_identity(shape):
+    """Creates a identity array corresponding to shape."""
+    diag_len = min(shape, default=1)
+    idx = jnp.arange(diag_len)
+    I = jnp.zeros(shape).at[(idx,) * len(shape)].set(1)
+    return I
 
 
-class _BroydenState(eqx.Module):
+def _orthogonal_basis_for_pytree(pytree):
+    """Creates a list with orthogonal basis "vectors" for a given pytree shape, 
+    where the individual leafs are treated as dimensions. Such that e.g. tree_dot(basis_i, basis_j)=a*δ_ij.
+
+    **Arguments**:
+
+    - `pytree`: A pytree such that the output of `_orthogonal_basis_for_pytree` is a list of orthogonal
+    pytrees of the same structure as `pytree`.
+
+    **Returns**:
+    A list of basis-pytrees which span the current pytree-space.
+    """
+    leaves, structure = jtu.tree_flatten(pytree)
+    pytree_basis = []
+    for N_basis in range(len(leaves)):
+        basis_leaves = []
+        for i1, l1 in enumerate(leaves):
+            if i1 == N_basis:
+                basis_leaves.append(_generalized_identity(jnp.shape(l1)))
+            else:
+                basis_leaves.append(jnp.zeros(jnp.shape(l1)))
+        pytree_basis.append(jtu.tree_unflatten(structure, basis_leaves))
+    return pytree_basis
+
+
+def _general_identity_pytree(pytree1, pytree2):
+    """Creates an lx.PytreeLinearOperator such that the structure/shape of 
+    I.mv(pytree2) matches the structrue/shape of pytree1.
+    """
+    basis1 = _orthogonal_basis_for_pytree(pytree1)
+    basis2 = _orthogonal_basis_for_pytree(pytree2)
+
+    I_init = (0 * _outer(basis1[0], basis2[0])**ω).ω
+    for b1, b2 in zip(basis1, basis2):
+        outer = _outer(b1, b2)
+        I_init = (I_init**ω + outer**ω).ω
+    return lx.PyTreeLinearOperator(I_init, jax.eval_shape(lambda: pytree1))
+
+
+
+
+
+class _BroydenState(eqx.Module, Generic[Y]):
     jinvprev: Y
     diff_y: Y
     f_info: FunctionInfo.Eval
@@ -52,7 +99,7 @@ def update_jacinv_good_broyden(jprev, dy, df):
     pw = _outer(p, w)
     pw = jax.tree.map(lambda leaf: leaf/q, pw)
     j = (j**ω + pw**ω).ω
-    return lx.PyTreeLinearOperator(j, jax.eval_shape(lambda: df))
+    return lx.PyTreeLinearOperator(j, output_structure=jax.eval_shape(lambda: dy))
 
 
 
@@ -65,7 +112,7 @@ def update_jacinv_bad_broyden(jprev, dy, df):
     pw = _outer(p, w)
     pw = jax.tree.map(lambda leaf: leaf/q, pw)
     j = (j**ω + pw**ω).ω
-    return lx.PyTreeLinearOperator(j, jax.eval_shape(lambda: df))
+    return lx.PyTreeLinearOperator(j, output_structure=jax.eval_shape(lambda: dy))
 
 
 
@@ -87,10 +134,10 @@ class _AbstractBroyden(AbstractRootFinder[Y, Out, Aux, _BroydenState]):
         aux_struct: PyTree[jax.ShapeDtypeStruct],
         tags: frozenset[object],
     ) -> _BroydenState:
+        f_eval, aux = fn(y, args)
         
         # starting with the actual jacobian inverse or an approximate would be better
-        jinvprev = _identity_pytree(y) # input should be y(?), because J^-1 maps from f-space to y-space. 
-        f_eval, aux = fn(y, args)
+        jinvprev = _general_identity_pytree(y, f_eval) # input should be (y, f_eval), because J^-1 maps from f-space to y-space. 
         diff_y = jax.tree.map(lambda leaf: jnp.full_like(leaf, jnp.inf), y)
 
         return _BroydenState(
@@ -116,7 +163,7 @@ class _AbstractBroyden(AbstractRootFinder[Y, Out, Aux, _BroydenState]):
         jinvprev, fprev = state.jinvprev, state.f_info.f
         diff_y = (-1*jinvprev.mv(fprev)**ω).ω
         new_y = (y**ω + diff_y**ω).ω
-        
+
         if lower is not None:
             new_y = jtu.tree_map(lambda a, b: jnp.clip(a, min=b), new_y, lower)
         if upper is not None:

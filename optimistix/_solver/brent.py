@@ -25,12 +25,12 @@ from .._solution import RESULTS
 
 
 class _GoldenSectionState(eqx.Module):
-    lower: float
-    upper: float
-    y1: float
-    y2: float
-    f1: float
-    f2: float
+    lower: Scalar
+    upper: Scalar
+    y1: Scalar
+    y2: Scalar
+    f1: Scalar
+    f2: Scalar
 
     first_step: Bool[Array, ""]
     f_info: FunctionInfo.Eval
@@ -220,12 +220,12 @@ class GoldenSectionSearch(AbstractMinimiser[Y, Aux, _GoldenSectionState]):
 
 
 
-class _JarrattState(eqx.Module):
-    y: float
-    y1: float
-    y2: float
-    f1: float
-    f2: float
+class _SPIState(eqx.Module):
+    y: Scalar
+    y1: Scalar
+    y2: Scalar
+    f1: Scalar
+    f2: Scalar
     
     first_step: Bool[Array, ""]
     f_info: FunctionInfo.Eval
@@ -235,8 +235,8 @@ class _JarrattState(eqx.Module):
 
 
 
-class Jarratt(AbstractMinimiser[Y, Aux, _JarrattState]):
-    """Jarratt's method for minimization of 1D-functions. Also known as Successive Parabolic Interpolation (SPI). 
+class SPI(AbstractMinimiser[Y, Aux, _SPIState]):
+    """Successive Parabolic Interpolation for the minimization of 1D functions.
     Each iteration a parabola is fitted through the current and previous two guesses. The location of the extremum of this parabola 
     is used as the updated guess of the minimum. 
     The method is not guaranteed to find a minimum. It may also find maxima or saddle points instead. Additionally the method can diverge. 
@@ -260,18 +260,18 @@ class Jarratt(AbstractMinimiser[Y, Aux, _JarrattState]):
         f_struct: jax.ShapeDtypeStruct,
         aux_struct: PyTree[jax.ShapeDtypeStruct],
         tags: frozenset[object],
-    ) -> _JarrattState:
+    ) -> _SPIState:
         
         y1, y2 = jnp.array(options.get("y1"), dtype=float), jnp.array(options.get("y2"), dtype=float)
 
         if jnp.shape(y) != () or jnp.shape(y1) != () or jnp.shape(y2) != ():
             raise ValueError(
-                "Jarratt can only be used to find the minima of a function taking a "
+                "SPI can only be used to find the minima of a function taking a "
                 "scalar input."
             )
         if not isinstance(f_struct, jax.ShapeDtypeStruct) or f_struct.shape != ():
             raise ValueError(
-                "Jarratt can only be used to find the minima of a function producing a "
+                "SPI can only be used to find the minima of a function producing a "
                 "scalar input."
             )
 
@@ -282,7 +282,7 @@ class Jarratt(AbstractMinimiser[Y, Aux, _JarrattState]):
         f_eval, aux_eval = fn(y, args)
         
         
-        return _JarrattState(
+        return _SPIState(
             y=y,
             y1=y1,
             y2=y2,
@@ -300,9 +300,9 @@ class Jarratt(AbstractMinimiser[Y, Aux, _JarrattState]):
         y: Y,
         args: PyTree,
         options: dict[str, Any],
-        state: _JarrattState,
+        state: _SPIState,
         tags: frozenset[object],
-    ) -> tuple[Y, _JarrattState, Aux]:
+    ) -> tuple[Y, _SPIState, Aux]:
         y1, y2, f1, f2 = state.y1, state.y2, state.f1, state.f2
         f = state.f_info.f
 
@@ -327,7 +327,7 @@ class Jarratt(AbstractMinimiser[Y, Aux, _JarrattState]):
         y, f_info, aux, terminate = accepted()
         result = RESULTS.successful
 
-        state = _JarrattState(
+        state = _SPIState(
             y=y,
             y1=y1,
             y2=y2,
@@ -348,7 +348,7 @@ class Jarratt(AbstractMinimiser[Y, Aux, _JarrattState]):
         y: Y,
         args: PyTree,
         options: dict[str, Any],
-        state: _JarrattState,
+        state: _SPIState,
         tags: frozenset[object],
     ) -> tuple[Bool[Array, ""], RESULTS]:
         return state.terminate, state.result
@@ -360,7 +360,7 @@ class Jarratt(AbstractMinimiser[Y, Aux, _JarrattState]):
         aux: Aux,
         args: PyTree,
         options: dict[str, Any],
-        state: _JarrattState,
+        state: _SPIState,
         tags: frozenset[object],
         result: RESULTS,
     ) -> tuple[Y, Aux, dict[str, Any]]:
@@ -393,12 +393,12 @@ class Jarratt(AbstractMinimiser[Y, Aux, _JarrattState]):
 
 
 class _BrentState(eqx.Module):
-    y1: float
-    y2: float
-    f1: float
-    f2: float
+    y1: Scalar
+    y2: Scalar
+    f1: Scalar
+    f2: Scalar
 
-    jarrat_quotient: float
+    spi_quotient: Scalar
     
     first_step: Bool[Array, ""]
     f_info: FunctionInfo.Eval
@@ -411,8 +411,8 @@ class _BrentState(eqx.Module):
 
 class Brent(AbstractMinimiser[Y, Aux, _BrentState]):
     """Brent's method for minimization of 1D functions. 
-    Analogously to the Brent-Dekker method in root-finding, this algorithm combines two algorithms (Golden-Section-Search and Jarratt's method) 
-    in order to obtain guaranteed convergence with a superlinear convergence rate. Each iteration the algorithm attempts Jarratt's method. 
+    Analogously to the Brent-Dekker method in root-finding, this algorithm combines two algorithms (Golden-Section-Search and SPI's method) 
+    in order to obtain guaranteed convergence with a superlinear convergence rate. Each iteration the algorithm attempts SPI's method. 
     If this fails the algorithm falls back to Golden-Section-Search.
 
     
@@ -436,7 +436,7 @@ class Brent(AbstractMinimiser[Y, Aux, _BrentState]):
         f_struct: jax.ShapeDtypeStruct,
         aux_struct: PyTree[jax.ShapeDtypeStruct],
         tags: frozenset[object],
-    ) -> _JarrattState:
+    ) -> _BrentState:
         
         y1, y2 = jnp.asarray(options.get("lower"), dtype=float), jnp.asarray(options.get("upper"), dtype=float)
 
@@ -461,7 +461,7 @@ class Brent(AbstractMinimiser[Y, Aux, _BrentState]):
             y2=y2,
             f1=f1,
             f2=f2,
-            jarrat_quotient=jnp.array(1.0),
+            spi_quotient=jnp.array(1.0),
             f_info=FunctionInfo.Eval(f_eval),
             first_step=jnp.array(True),
             terminate=jnp.array(False),
@@ -474,28 +474,28 @@ class Brent(AbstractMinimiser[Y, Aux, _BrentState]):
         y: Y,
         args: PyTree,
         options: dict[str, Any],
-        state: _JarrattState,
+        state: _BrentState,
         tags: frozenset[object],
-    ) -> tuple[Y, _JarrattState, Aux]:
+    ) -> tuple[Y, _BrentState, Aux]:
         
         phi = jnp.array(1.618034)
         y1, y2, f1, f2 = state.y1, state.y2, state.f1, state.f2
-        f, e = state.f_info.f, state.jarrat_quotient
+        f, e = state.f_info.f, state.spi_quotient
 
 
         p = (y1-y)**2*(f-f2)+(y2-y)**2*(f1-f)
         q = (y1-y)*(f-f2) + (y2-y)*(f1-f)
         e_eval = p/(q + 1e-15)
-        y_jarrat = y + 0.5*e
+        y_spi = y + 0.5*e
 
-        out_of_bounds = (y_jarrat < y1) | (y_jarrat > y2) 
+        out_of_bounds = (y_spi < y1) | (y_spi > y2) 
         steps_getting_smaller = (jnp.abs(e_eval) < jnp.abs(e))
         e_big_enough = (1e-12 < jnp.abs(e)) # i dont see the point of this condition
-        jarratt_not_usable = out_of_bounds | (1-steps_getting_smaller) | (1-e_big_enough)
+        SPI_not_usable = out_of_bounds | (1-steps_getting_smaller) | (1-e_big_enough)
 
         y_gss = y2 + (y1-y2)/phi
-        #y_eval = jarratt_not_usable*y_gss + (1-jarratt_not_usable)*y_jarrat
-        y_eval = jnp.where(jarratt_not_usable, y_gss, y_jarrat)
+        #y_eval = SPI_not_usable*y_gss + (1-SPI_not_usable)*y_spi
+        y_eval = jnp.where(SPI_not_usable, y_gss, y_spi)
         f_eval, aux_eval = fn(y_eval, args)
 
 
@@ -541,7 +541,7 @@ class Brent(AbstractMinimiser[Y, Aux, _BrentState]):
             y2=y2,
             f1=f1,
             f2=f2,
-            jarrat_quotient=e_eval, #maybe only use e_eval when jarratt is used?
+            spi_quotient=e_eval, #maybe only use e_eval when SPI is used?
             f_info=f_info,
             first_step=jnp.array(False),
             terminate=terminate,

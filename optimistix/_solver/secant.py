@@ -107,8 +107,12 @@ class _AbstractSecant(AbstractRootFinder[Y, Out, Aux, _SecantState]):
         tags: frozenset[object],
     ) -> _SecantState:
         
-        y1 = options["y1"]
-        
+        y1 = options.get("y1")
+        if jax.eval_shape(lambda: y)!=jax.eval_shape(lambda: y1):
+            raise ValueError(
+                "y0 and y1 need to have the same structure/shape"
+            )
+
         I = _identity_pytree(y)
         pytree_basis = _orthonormal_basis_for_pytree(y)
         
@@ -144,7 +148,6 @@ class _AbstractSecant(AbstractRootFinder[Y, Out, Aux, _SecantState]):
         del options
 
         y1, diff_y, I, pytree_basis, J_approx = state.y1, state.diff_y, state.I, state.basis, state.J_init
-
         diff_y_norm = jnp.sqrt(tree_dot(diff_y, diff_y))
 
         f_eval, aux = fn(y, args)

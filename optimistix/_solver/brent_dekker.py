@@ -18,12 +18,12 @@ from .._solution import RESULTS
 class _IQIState(eqx.Module):
     y1: Scalar
     y2: Scalar
-    val1: Float[Array, ""]
-    val2: Float[Array, ""]
+    f1: Float[Array, ""]
+    f2: Float[Array, ""]
 
 
 
-def _do_iqi(y1: float, y2: float, y3: float, f1: float, f2: float, f3: float) -> float:
+def _do_iqi(y1: Scalar, y2: Scalar, y3: Scalar, f1: Scalar, f2: Scalar, f3: Scalar) -> Scalar:
     # adding 1e-15 here to avoid python raising errors
     return y3 * f2*f1/((f3-f2)*(f3-f1) + 1e-15) + y2 * f3*f1/((f2-f3)*(f2-f1) + 1e-15) + y1 * f3*f2/((f1-f3)*(f1-f2) + 1e-15)
 
@@ -49,8 +49,8 @@ class InverseQuadraticInterpolation(AbstractRootFinder[Scalar, Scalar, Aux, _IQI
     The method can be made stable by introducing a conditional alternative update. This is exactly what Brent's method and others are doing.
     """
 
-    rtol: float
-    atol: float
+    rtol: Scalar
+    atol: Scalar
     # All norms are the same for scalars.
     norm: ClassVar[Callable[[PyTree], Scalar]] = jnp.abs
 
@@ -78,14 +78,14 @@ class InverseQuadraticInterpolation(AbstractRootFinder[Scalar, Scalar, Aux, _IQI
                 "a scalar output."
             )
         
-        val1, aux = fn(y1, args)
-        val2, aux = fn(y2, args)
+        f1, aux = fn(y1, args)
+        f2, aux = fn(y2, args)
 
         return _IQIState(
             y1=y1,
             y2=y2,
-            val1=val1,
-            val2=val2,
+            f1=f1,
+            f2=f2,
         )
 
     def step(
@@ -99,14 +99,14 @@ class InverseQuadraticInterpolation(AbstractRootFinder[Scalar, Scalar, Aux, _IQI
     ) -> tuple[Scalar, _IQIState, Aux]:
         del options
 
-        val, aux = fn(y, args)
-        new_y = _do_iqi(y, state.y1, state.y2, val, state.val1, state.val2)
+        f_eval, aux = fn(y, args)
+        new_y = _do_iqi(y, state.y1, state.y2, f_eval, state.f1, state.f2)
 
         new_state = _IQIState(
             y1=y,
             y2=state.y1,
-            val1=val,
-            val2=state.val1,
+            f1=f_eval,
+            f2=state.f1,
         )
         return new_y, new_state, aux
 
@@ -122,7 +122,7 @@ class InverseQuadraticInterpolation(AbstractRootFinder[Scalar, Scalar, Aux, _IQI
         del fn, args, options
         scale = self.atol + self.rtol * jnp.abs(y)
         y_small = jnp.abs(state.y1 - y) < scale
-        f_small = jnp.abs(state.val1) < self.atol
+        f_small = jnp.abs(state.f1) < self.atol
         return y_small & f_small, RESULTS.successful
 
     def postprocess(
@@ -160,11 +160,11 @@ class InverseQuadraticInterpolation(AbstractRootFinder[Scalar, Scalar, Aux, _IQI
 
 class _Secant1DState(eqx.Module):
     y1: Scalar
-    val: Float[Array, ""]
+    f: Float[Array, ""]
 
 
 
-def _do_secant(y: float, y1: float, val: float, val1: float) -> float:
+def _do_secant(y: Scalar, y1: Scalar, val: Scalar, val1: Scalar) -> Scalar:
     # adding 1e-15 here to avoid python raising errors
     return y - val*(y1 - y)/(val1 - val + 1e-15)
 
@@ -187,8 +187,8 @@ class Secant1D(AbstractRootFinder[Scalar, Scalar, Aux, _Secant1DState]):
 
     """
 
-    rtol: float
-    atol: float
+    rtol: Scalar
+    atol: Scalar
     # All norms are the same for scalars.
     norm: ClassVar[Callable[[PyTree], Scalar]] = jnp.abs
 
@@ -215,11 +215,11 @@ class Secant1D(AbstractRootFinder[Scalar, Scalar, Aux, _Secant1DState]):
                 "a scalar output."
             )
         
-        val, aux = fn(y1, args)
+        f, aux = fn(y1, args)
 
         return _Secant1DState(
             y1 = y1,
-            val = val,
+            f = f,
         )
 
     def step(
@@ -233,11 +233,11 @@ class Secant1D(AbstractRootFinder[Scalar, Scalar, Aux, _Secant1DState]):
     ) -> tuple[Scalar, _Secant1DState, Aux]:
         del options, tags
 
-        val, aux = fn(y, args)
-        new_y = _do_secant(y, state.y1, val, state.val)
+        f, aux = fn(y, args)
+        new_y = _do_secant(y, state.y1, f, state.f)
         new_state = _Secant1DState(
             y1 = y,
-            val = val
+            f = f
         )
         return new_y, new_state, aux
 
@@ -253,7 +253,7 @@ class Secant1D(AbstractRootFinder[Scalar, Scalar, Aux, _Secant1DState]):
         del fn, args, options
         scale = self.atol + self.rtol * jnp.abs(y)
         y_small = jnp.abs(state.y1 - y) < scale
-        f_small = jnp.abs(state.val) < self.atol
+        f_small = jnp.abs(state.f) < self.atol
         return y_small & f_small, RESULTS.successful
 
     def postprocess(
@@ -308,9 +308,9 @@ class _BrentDekkerState(eqx.Module):
     y0: Scalar
     y1: Scalar
     y2: Scalar
-    val: Float[Array, ""]
-    val0: Float[Array, ""]
-    val1: Float[Array, ""]
+    f: Float[Array, ""]
+    f0: Float[Array, ""]
+    f1: Float[Array, ""]
     use_bisection: Bool[Array, ""]
 
 
@@ -336,8 +336,8 @@ class BrentDekker(AbstractRootFinder[Scalar, Scalar, Aux, _BrentDekkerState]):
 
     """
 
-    rtol: float
-    atol: float
+    rtol: Scalar
+    atol: Scalar
     # All norms are the same for scalars.
     norm: ClassVar[Callable[[PyTree], Scalar]] = jnp.abs
 
@@ -366,36 +366,36 @@ class BrentDekker(AbstractRootFinder[Scalar, Scalar, Aux, _BrentDekkerState]):
                 "a scalar output."
             )
             
-        val, _ = fn(y, args)
-        lower_val, _ = fn(lower, args)
-        upper_val, _ = fn(upper, args)
+        f, _ = fn(y, args)
+        lower_f, _ = fn(lower, args)
+        upper_f, _ = fn(upper, args)
 
 
-        lower_neg = lower_val < 0
-        upper_neg = upper_val < 0
+        lower_neg = lower_f < 0
+        upper_neg = upper_f < 0
         root_not_contained = lower_neg == upper_neg
-        val = eqx.error_if(
-            val,
+        f = eqx.error_if(
+            f,
             root_not_contained,
             msg="The root is not contained in [lower, upper]",
         )
 
 
-        same_sign_lower = (jnp.sign(val)*jnp.sign(lower_val) > 0)
+        same_sign_lower = (jnp.sign(f)*jnp.sign(lower_f) > 0)
 
         y0 = same_sign_lower*upper + (1-same_sign_lower)*lower
-        val0 = same_sign_lower*upper_val + (1-same_sign_lower)*lower_val
+        f0 = same_sign_lower*upper_f + (1-same_sign_lower)*lower_f
 
         y1 = y2 = y
-        val1 = val
+        f1 = f
         
         return _BrentDekkerState(
             y0 = y0,
             y1 = y1,
             y2 = y2,
-            val = val,
-            val0 = val0,
-            val1 = val1,
+            f = f,
+            f0 = f0,
+            f1 = f1,
             use_bisection = jnp.array(True)
         )
 
@@ -410,13 +410,13 @@ class BrentDekker(AbstractRootFinder[Scalar, Scalar, Aux, _BrentDekkerState]):
     ) -> tuple[Scalar, _BrentDekkerState, Aux]:
         del options, tags
 
-        y0, y1, y2, val, val0, val1 = state.y0, state.y1, state.y2, state.val, state.val0, state.val1
+        y0, y1, y2, f, f0, f1 = state.y0, state.y1, state.y2, state.f, state.f0, state.f1
 
-        use_iqi = (val!=val1) & (val0!=val1)
+        use_iqi = (f!=f1) & (f0!=f1)
         #new_y = use_iqi * _do_iqi(y, y0, y1, val, val0, val1) + (1-use_iqi) * _do_secant(y, y0, val, val0)
         new_y = jnp.where(use_iqi, 
-                          _do_iqi(y, y0, y1, val, val0, val1), 
-                          _do_secant(y, y0, val, val0))
+                          _do_iqi(y, y0, y1, f, f0, f1), 
+                          _do_secant(y, y0, f, f0))
 
 
         tol = self.atol + self.rtol * jnp.abs(y)
@@ -435,35 +435,35 @@ class BrentDekker(AbstractRootFinder[Scalar, Scalar, Aux, _BrentDekkerState]):
         #new_y = use_bisection*(0.5 * (y0 + y)) + (1-use_bisection)*new_y
         new_y = jnp.where(use_bisection, 0.5 * (y0 + y), new_y)
 
-        new_val, aux = fn(new_y, args)
-        y1, y2, val1 = y, y1, val
+        new_f, aux = fn(new_y, args)
+        y1, y2, f1 = y, y1, f
 
 
-        opposite_sign = (jnp.sign(val0)*jnp.sign(new_val) < 0)
+        opposite_sign = (jnp.sign(f0)*jnp.sign(new_f) < 0)
 
         y = jnp.where(opposite_sign, new_y, y)
-        val = jnp.where(opposite_sign, new_val, val)
+        f = jnp.where(opposite_sign, new_f, f)
 
         y0 = jnp.where(1-opposite_sign, new_y, y0)
-        val0 = jnp.where(1-opposite_sign, new_val, val0)
+        f0 = jnp.where(1-opposite_sign, new_f, f0)
 
 
 
-        is_smaller = (jnp.abs(val0) < jnp.abs(val))
+        is_smaller = (jnp.abs(f0) < jnp.abs(f))
 
         y0_new = jnp.where(is_smaller, y0, y)
         new_y = jnp.where(is_smaller, y, y0)
 
-        val0_new = jnp.where(is_smaller, val0, val)
-        val_new = jnp.where(is_smaller, val, val0)
+        f0_new = jnp.where(is_smaller, f0, f)
+        f_new = jnp.where(is_smaller, f, f0)
 
         new_state = _BrentDekkerState(
             y0 = y0_new,
             y1 = y1,
             y2 = y2,
-            val = val_new,
-            val0 = val0_new,
-            val1 = val1,
+            f = f_new,
+            f0 = f0_new,
+            f1 = f1,
             use_bisection = use_bisection
         )
 
@@ -481,7 +481,7 @@ class BrentDekker(AbstractRootFinder[Scalar, Scalar, Aux, _BrentDekkerState]):
         del fn, args, options
         scale = self.atol + self.rtol * jnp.abs(y)
         y_small = jnp.abs(state.y0 - y) < scale
-        f_small = jnp.abs(state.val) < self.atol
+        f_small = jnp.abs(state.f) < self.atol
         return y_small & f_small, RESULTS.successful
 
     def postprocess(

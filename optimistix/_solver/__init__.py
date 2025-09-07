@@ -6,8 +6,16 @@ from .best_so_far import (
     BestSoFarRootFinder as BestSoFarRootFinder,
 )
 from .bisection import Bisection as Bisection
-from .brent import GoldenSectionSearch as GoldenSectionSearch, Jarratt as Jarratt, Brent as Brent
-from .brent_dekker import InverseQuadraticInterpolation as InverseQuadraticInterpolation, Secant1D as Secant1D, BrentDekker as BrentDekker
+from .brent import (
+    Brent as Brent, 
+    GoldenSectionSearch as GoldenSectionSearch, 
+    SPI as SPI
+)
+from .brent_dekker import (
+    BrentDekker as BrentDekker, 
+    InverseQuadraticInterpolation as InverseQuadraticInterpolation, 
+    Secant1D as Secant1D
+)
 from .broyden import Broyden as Broyden, BadBroyden as BadBroyden
 from .dogleg import Dogleg as Dogleg, DoglegDescent as DoglegDescent
 from .fixed_point import FixedPointIteration as FixedPointIteration

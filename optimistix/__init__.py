@@ -72,7 +72,6 @@ from ._solver import (
     InverseQuadraticInterpolation as InverseQuadraticInterpolation,
     IndirectDampedNewtonDescent as IndirectDampedNewtonDescent,
     IndirectLevenbergMarquardt as IndirectLevenbergMarquardt,
-    Jarratt as Jarratt,
     LBFGS as LBFGS,
     LearningRate as LearningRate,
     LevenbergMarquardt as LevenbergMarquardt,
@@ -86,6 +85,7 @@ from ._solver import (
     polak_ribiere as polak_ribiere,
     Secant as Secant,
     Secant1D as Secant1D,
+    SPI as SPI,
     SteepestDescent as SteepestDescent,
 )
 

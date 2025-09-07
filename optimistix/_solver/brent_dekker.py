@@ -413,7 +413,6 @@ class BrentDekker(AbstractRootFinder[Scalar, Scalar, Aux, _BrentDekkerState]):
         y0, y1, y2, f, f0, f1 = state.y0, state.y1, state.y2, state.f, state.f0, state.f1
 
         use_iqi = (f!=f1) & (f0!=f1)
-        #new_y = use_iqi * _do_iqi(y, y0, y1, val, val0, val1) + (1-use_iqi) * _do_secant(y, y0, val, val0)
         new_y = jnp.where(use_iqi, 
                           _do_iqi(y, y0, y1, f, f0, f1), 
                           _do_secant(y, y0, f, f0))
@@ -432,7 +431,6 @@ class BrentDekker(AbstractRootFinder[Scalar, Scalar, Aux, _BrentDekkerState]):
         cond5 = ((1 - use_bisection) & (min3 < tol))
         use_bisection = (cond1 | cond2 | cond3 | cond4 | cond5).astype(jnp.bool_)
 
-        #new_y = use_bisection*(0.5 * (y0 + y)) + (1-use_bisection)*new_y
         new_y = jnp.where(use_bisection, 0.5 * (y0 + y), new_y)
 
         new_f, aux = fn(new_y, args)
@@ -482,7 +480,10 @@ class BrentDekker(AbstractRootFinder[Scalar, Scalar, Aux, _BrentDekkerState]):
         scale = self.atol + self.rtol * jnp.abs(y)
         y_small = jnp.abs(state.y0 - y) < scale
         f_small = jnp.abs(state.f) < self.atol
-        return y_small & f_small, RESULTS.successful
+
+        # stop if the previous value was converged 
+        f0_small = jnp.abs(state.f0) < self.atol
+        return ((y_small & f_small) | f0_small), RESULTS.successful
 
     def postprocess(
         self,
@@ -495,6 +496,8 @@ class BrentDekker(AbstractRootFinder[Scalar, Scalar, Aux, _BrentDekkerState]):
         tags: frozenset[object],
         result: RESULTS,
     ) -> tuple[Scalar, Aux, dict[str, Any]]:
+        f0_small = jnp.abs(state.f0) < self.atol
+        y = jnp.where(f0_small, state.y0, y)
         return y, aux, {}
 
 

@@ -107,7 +107,10 @@ class _AbstractSecant(AbstractRootFinder[Y, Out, Aux, _SecantState]):
         tags: frozenset[object],
     ) -> _SecantState:
         
-        y1 = options.get("y1")
+        y1 = jax.tree.map(lambda x: jnp.asarray(x), options.get("y1"))
+        y = jax.tree.map(lambda x: jnp.asarray(x, dtype=x.dtype), y)
+        y1 = jax.tree.map(lambda x: jnp.asarray(x, dtype=x.dtype), y1)
+
         if jax.eval_shape(lambda: y)!=jax.eval_shape(lambda: y1):
             raise ValueError(
                 "y0 and y1 need to have the same structure/shape"
@@ -154,7 +157,7 @@ class _AbstractSecant(AbstractRootFinder[Y, Out, Aux, _SecantState]):
         f_vals = [fn((y**ω + diff_y_norm*I.mv(basis)**ω).ω, args)[0] for basis in pytree_basis]
         f_vals = [(f_val**ω - f_eval**ω).ω for f_val in f_vals]
 
-        # this could maybe be done more efficiently, here a lot of zeros are added together, because basis is mostly zeros
+        # this could be done more efficiently, here a lot of zeros are added together, because basis is mostly zeros
         for f_val, basis in zip(f_vals, pytree_basis):
             outer = _outer(f_val, basis)
             J_approx = (J_approx**ω + outer**ω).ω

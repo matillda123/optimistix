@@ -23,7 +23,7 @@ from .._search import (
     FunctionInfo,
 )
 from .._solution import RESULTS
-from .learning_rate import LearningRate
+from .learning_rate import LearningRate, ScaledLearningRate, pade_10
 
 
 class _SteepestDescentState(eqx.Module, Generic[Y]):
@@ -170,19 +170,21 @@ class AbstractGradientDescent(AbstractMinimiser[Y, Aux, _GradientDescentState]):
         f_eval, lin_fn, aux_eval = jax.linearize(
             lambda _y: fn(_y, args), state.y_eval, has_aux=True
         )
+
+        # I moved it to make GradientDescent work with ScaledLearningRate
+        grad = lin_to_grad(lin_fn, state.y_eval, autodiff_mode=autodiff_mode)
+        f_eval_info = FunctionInfo.EvalGrad(f_eval, grad)
+        
         step_size, accept, search_result, search_state = self.search.step(
             state.first_step,
             y,
             state.y_eval,
             state.f_info,
-            FunctionInfo.Eval(f_eval),
+            f_eval_info, #FunctionInfo.Eval(f_eval),
             state.search_state,
         )
 
         def accepted(descent_state):
-            grad = lin_to_grad(lin_fn, state.y_eval, autodiff_mode=autodiff_mode)
-
-            f_eval_info = FunctionInfo.EvalGrad(f_eval, grad)
             descent_state = self.descent.query(state.y_eval, f_eval_info, descent_state)
             y_diff = (state.y_eval**ω - y**ω).ω
             f_diff = (f_eval**ω - state.f_info.f**ω).ω
@@ -283,3 +285,58 @@ class GradientDescent(AbstractGradientDescent[Y, Aux]):
         self.norm = norm
         self.descent = SteepestDescent()
         self.search = LearningRate(learning_rate)
+
+
+
+
+
+
+
+
+
+
+
+
+
+class ScaledGradientDescent(AbstractGradientDescent[Y, Aux]):
+    """Classic gradient descent with a learning rate `learning_rate`.
+
+    Supports the following `options`:
+
+    - `autodiff_mode`: whether to use forward- or reverse-mode autodifferentiation to
+        compute the gradient. Can be either `"fwd"` or `"bwd"`. Defaults to `"bwd"`,
+        which is usually more efficient. Changing this can be useful when the target
+        function does not support reverse-mode automatic differentiation.
+    """
+
+    rtol: float
+    atol: float
+    norm: Callable[[PyTree], Scalar]
+    descent: SteepestDescent[Y]
+    search: LearningRate[Y]
+
+    def __init__(
+        self,
+        learning_rate: float,
+        scaling_rate: float,
+        lower_bound: float,
+        rtol: float,
+        atol: float,
+        norm: Callable[[PyTree], Scalar] = max_norm,
+        func_approx: Callable[[Scalar, Scalar, Scalar], Scalar] = pade_10,
+    ):
+        """**Arguments:**
+
+        - `learning_rate`: Specifies a constant learning rate to use at each step.
+        - `rtol`: Relative tolerance for terminating the solve.
+        - `atol`: Absolute tolerance for terminating the solve.
+        - `norm`: The norm used to determine the difference between two iterates in the
+            convergence criteria. Should be any function `PyTree -> Scalar`. Optimistix
+            includes three built-in norms: [`optimistix.max_norm`][],
+            [`optimistix.rms_norm`][], and [`optimistix.two_norm`][].
+        """
+        self.rtol = rtol
+        self.atol = atol
+        self.norm = norm
+        self.descent = SteepestDescent()
+        self.search = ScaledLearningRate(learning_rate, scaling_rate, lower_bound, func_approx)

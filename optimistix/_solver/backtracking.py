@@ -110,3 +110,81 @@ BacktrackingArmijo.__init__.__doc__ = """**Arguments:**
 - `step_init`: The first `step_size` the backtracking algorithm will
     try. Must be greater than 0.
 """
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+from collections.abc import Callable
+from jaxtyping import PyTree
+from .._misc import max_norm
+
+class Backtracking_RootFinding(AbstractSearch[Y, _FnInfo, _FnEvalInfo, _BacktrackingState]):
+    """Perform a backtracking-style line search for root finding."""
+
+    decrease_factor: ScalarLike = 0.5
+    step_init: ScalarLike = 1.0
+    norm: Callable[[PyTree], Scalar] = max_norm
+
+    def __post_init__(self):
+        self.decrease_factor = eqx.error_if(
+            self.decrease_factor,
+            (self.decrease_factor <= 0)  # pyright: ignore
+            | (self.decrease_factor >= 1),  # pyright: ignore
+            "`BacktrackingArmoji(decrease_factor=...)` must be between 0 and 1.",
+        )
+        self.step_init = eqx.error_if(
+            self.step_init,
+            self.step_init <= 0,  # pyright: ignore
+            "`BacktrackingArmoji(step_init=...)` must be strictly greater than 0.",
+        )
+
+    def init(self, y: Y, f_info_struct: _FnInfo) -> _BacktrackingState:
+        del y, f_info_struct
+        return _BacktrackingState(step_size=jnp.array(self.step_init))
+
+    def step(
+        self,
+        first_step: Bool[Array, ""],
+        y: Y,
+        y_eval: Y,
+        f_info: _FnInfo,
+        f_eval_info: _FnEvalInfo,
+        state: _BacktrackingState,
+    ) -> tuple[Scalar, Bool[Array, ""], RESULTS, _BacktrackingState]:
+        
+        # Terminate when the norm of the next function value is smaller than the current one.
+        f_min = f_info.as_min()
+        f_min_eval = f_eval_info.as_min()
+        is_good = self.norm(f_min_eval) < self.norm(f_min)
+
+        accept = first_step | is_good
+        step_size = jnp.where(
+            accept, self.step_init, self.decrease_factor * state.step_size
+        )
+        step_size = cast(Scalar, step_size)
+        return (
+            step_size,
+            accept,
+            RESULTS.successful,
+            _BacktrackingState(step_size=step_size),
+        )

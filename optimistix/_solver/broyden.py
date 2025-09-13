@@ -30,58 +30,6 @@ from .._search import FunctionInfo
 
 
 
-
-
-def _generalized_identity(shape):
-    """Creates a identity array corresponding to shape."""
-    diag_len = min(shape, default=1)
-    idx = jnp.arange(diag_len)
-    I = jnp.zeros(shape).at[(idx,) * len(shape)].set(1)
-    return I
-
-
-def _orthogonal_basis_for_pytree(pytree):
-    """Creates a list with orthogonal basis "vectors" for a given pytree shape, 
-    where the individual leafs are treated as dimensions. Such that e.g. tree_dot(basis_i, basis_j)=a*δ_ij.
-
-    **Arguments**:
-
-    - `pytree`: A pytree such that the output of `_orthogonal_basis_for_pytree` is a list of orthogonal
-    pytrees of the same structure as `pytree`.
-
-    **Returns**:
-    A list of basis-pytrees which span the current pytree-space.
-    """
-    leaves, structure = jtu.tree_flatten(pytree)
-    pytree_basis = []
-    for N_basis in range(len(leaves)):
-        basis_leaves = []
-        for i1, l1 in enumerate(leaves):
-            if i1 == N_basis:
-                basis_leaves.append(_generalized_identity(jnp.shape(l1)))
-            else:
-                basis_leaves.append(jnp.zeros(jnp.shape(l1)))
-        pytree_basis.append(jtu.tree_unflatten(structure, basis_leaves))
-    return pytree_basis
-
-
-def _general_identity_pytree(pytree1, pytree2):
-    """Creates an lx.PytreeLinearOperator such that the structure/shape of 
-    I.mv(pytree2) matches the structrue/shape of pytree1.
-    """
-    basis1 = _orthogonal_basis_for_pytree(pytree1)
-    basis2 = _orthogonal_basis_for_pytree(pytree2)
-
-    I_init = (0 * _outer(basis1[0], basis2[0])**ω).ω
-    for b1, b2 in zip(basis1, basis2):
-        outer = _outer(b1, b2)
-        I_init = (I_init**ω + outer**ω).ω
-    return lx.PyTreeLinearOperator(I_init, jax.eval_shape(lambda: pytree1))
-
-
-
-
-
 class _BroydenState(eqx.Module, Generic[Y]):
     jinvprev: Y
     diff_y: Y
@@ -116,6 +64,31 @@ def update_jacinv_bad_broyden(jprev, dy, df):
 
 
 
+
+
+def _general_identity_pytree(pytree1, pytree2):
+    leaves1, structure = jtu.tree_flatten(pytree1)
+    leaves2, structure = jtu.tree_flatten(pytree2)
+    eye_structure = structure.compose(structure)
+    eye_leaves = []
+    for i1, l1 in enumerate(leaves1):
+        for i2, l2 in enumerate(leaves2):
+            s1=jnp.shape(l1)
+            s2=jnp.shape(l2)
+            arr = jnp.zeros(jnp.shape(jnp.outer(l1,l2)))
+            if i1 == i2:
+                arr = jnp.fill_diagonal(arr, 1, inplace=False)
+                eye_leaves.append(arr.reshape(s1 + s2))
+            else:
+                eye_leaves.append(arr.reshape(s1 + s2))
+
+    return lx.PyTreeLinearOperator(
+        jtu.tree_unflatten(eye_structure, eye_leaves), 
+        jax.eval_shape(lambda: pytree1)
+        )
+
+
+
 class _AbstractBroyden(AbstractRootFinder[Y, Out, Aux, _BroydenState]):
 
     rtol: float
@@ -137,7 +110,7 @@ class _AbstractBroyden(AbstractRootFinder[Y, Out, Aux, _BroydenState]):
         f_eval, aux = fn(y, args)
         
         # starting with the actual jacobian inverse or an approximate would be better
-        jinvprev = _general_identity_pytree(y, f_eval) # input should be (y, f_eval), because J^-1 maps from f-space to y-space. 
+        jinvprev = _general_identity_pytree(y, f_eval)
         diff_y = jax.tree.map(lambda leaf: jnp.full_like(leaf, jnp.inf), y)
 
         return _BroydenState(

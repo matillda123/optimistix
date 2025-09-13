@@ -30,18 +30,7 @@ from .._search import FunctionInfo
 
 
 
-
-
-def _generalized_normalized_identity(shape: tuple) -> Array:
-    """Creates a normalized identity array corresponding to shape."""
-    diag_len = min(shape, default=1)
-    idx = jnp.arange(diag_len)
-    I = jnp.zeros(shape).at[(idx,) * len(shape)].set(1/jnp.sqrt(diag_len))
-    return I
-
-
-
-def _orthonormal_basis_for_pytree(pytree: PyTree[Array]) -> List[PyTree[Array]]:
+def _orthonormal_basis_for_pytree(pytree: PyTree[Array]) -> list[PyTree[Array]]:
     """Creates a list with orthonormal basis "vectors" for a given pytree shape, 
     where the individual leafs are treated as dimensions. Such that e.g. tree_dot(basis_i, basis_j)=δ_ij.
 
@@ -59,9 +48,11 @@ def _orthonormal_basis_for_pytree(pytree: PyTree[Array]) -> List[PyTree[Array]]:
         basis_leaves = []
         for i1, l1 in enumerate(leaves):
             if i1 == N_basis:
-                basis_leaves.append(_generalized_normalized_identity(jnp.shape(l1)))
+                arr = jnp.ones(jnp.shape(l1))
+                basis_leaves.append(arr/jnp.sqrt(jnp.size(arr)))
             else:
-                basis_leaves.append(jnp.zeros(jnp.shape(l1)))
+                arr = jnp.zeros(jnp.shape(l1))
+                basis_leaves.append(arr)
         pytree_basis.append(jtu.tree_unflatten(structure, basis_leaves))
     return pytree_basis
 
@@ -269,9 +260,9 @@ class _AbstractSecant(AbstractRootFinder[Y, Out, Aux, _SecantState]):
 class Secant(_AbstractSecant[Y, Out, Aux]):
     """A multivariate version of the Secant method. Developed by S. Robinson (https://epubs.siam.org/doi/abs/10.1137/0703057).
     Each iteration a new approximation of the Jacobian is constructed based on the location and corresponding function values of 
-    two points. However the method requires N function evaluations per iteration, where N is the dimensionality of the pytree. This 
-    is in contrast to Broyden's method which iteratively updates an approximate Jacobian inverse. The approximate Jacobian is used as 
-    in the Newton-Raphson method.
+    two points. However the method requires N function evaluations per iteration, where N is the dimensionality of the pytree. 
+    This means that the orthogonal directions of each leaf are not explored independently, in contrast to the original method of Robinson.
+    Thus this solver may fail for numerous problems.
 
 
     This solver requires the following `options`:

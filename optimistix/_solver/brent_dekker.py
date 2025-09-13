@@ -49,8 +49,8 @@ class InverseQuadraticInterpolation(AbstractRootFinder[Scalar, Scalar, Aux, _IQI
     The method can be made stable by introducing a conditional alternative update. This is exactly what Brent's method and others are doing.
     """
 
-    rtol: Scalar
-    atol: Scalar
+    rtol: float
+    atol: float
     # All norms are the same for scalars.
     norm: ClassVar[Callable[[PyTree], Scalar]] = jnp.abs
 
@@ -187,8 +187,8 @@ class Secant1D(AbstractRootFinder[Scalar, Scalar, Aux, _Secant1DState]):
 
     """
 
-    rtol: Scalar
-    atol: Scalar
+    rtol: float
+    atol: float
     # All norms are the same for scalars.
     norm: ClassVar[Callable[[PyTree], Scalar]] = jnp.abs
 
@@ -336,8 +336,8 @@ class BrentDekker(AbstractRootFinder[Scalar, Scalar, Aux, _BrentDekkerState]):
 
     """
 
-    rtol: Scalar
-    atol: Scalar
+    rtol: float
+    atol: float
     # All norms are the same for scalars.
     norm: ClassVar[Callable[[PyTree], Scalar]] = jnp.abs
 

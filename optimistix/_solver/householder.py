@@ -62,7 +62,7 @@ class Householder(AbstractRootFinder[Scalar, Scalar, Aux, _HouseholderState]):
     (e.g. order=1 is the Newton-Raphson method, order=2 is Halley's method, ...) 
     Even though the convergence rate equals the order+1, the increased computational demand for the evaluation 
     of the n-th derivative makes higher order methods barely usable. Additionally, higher order methods do 
-    not exhibit higher stability. They suffer from the same divergence issues as Newton-Raphson.
+    not exhibit increased stability. They suffer from the same divergence issues as Newton-Raphson.
     
     This may only be used with functions `R->R`, i.e. functions with scalar input and scalar output.
     """
@@ -89,13 +89,13 @@ class Householder(AbstractRootFinder[Scalar, Scalar, Aux, _HouseholderState]):
         if y.ndim > 0:
             raise ValueError(
                 "Householder can only be used to find the roots of a function taking a "
-                "scalar input. 1x1-Arrays are also not permitted."
+                "scalar input. y0 needs to have ndim=0"
             )
 
         if f_eval.ndim > 0:
             raise ValueError(
                 "Householder can only be used to find the roots of a function producing a "
-                "scalar input. 1x1-Arrays are also not permitted."
+                "scalar input. The output needs to have ndim=0."
             )
 
         householder_update = _get_householder_update(_NoAux(fn), self.order)
@@ -139,8 +139,8 @@ class Householder(AbstractRootFinder[Scalar, Scalar, Aux, _HouseholderState]):
         scale = self.atol + self.rtol * jnp.abs(y)
         y_small = jnp.abs(y - state.y_prev) < scale
         f_small = jnp.abs(state.f_info.f) < self.atol
-        # if y=Nan, the denominator in housholder update was probably zero, the solve was likely successful in this case
-        # however a warning should be printed. But idk how to do that with jax.jit.
+        # if y=Nan, the solve either diverged or converged perfectly, a warning should 
+        # be printed but idk how to do that with jax.jit
         return ((y_small & f_small) | jnp.isnan(y)), RESULTS.successful
 
     def postprocess(

@@ -30,31 +30,83 @@ from .._search import FunctionInfo
 
 
 
+# def _orthonormal_basis_for_pytree(pytree: PyTree[Array]) -> list[PyTree[Array]]:
+#     """Creates a list with orthonormal basis "vectors" for a given pytree shape, 
+#     where the individual leafs are treated as dimensions. Such that e.g. tree_dot(basis_i, basis_j)=δ_ij.
+
+#     **Arguments**:
+
+#     - `pytree`: A pytree such that the output of `_orthonormal_basis_for_pytree` is a list of orthonormal 
+#     pytrees of the same structure as `pytree`.
+
+#     **Returns**:
+#     A list of basis-pytrees which span the current pytree-space.
+#     """
+#     leaves, structure = jtu.tree_flatten(pytree)
+#     pytree_basis = []
+#     for N_basis in range(len(leaves)):
+#         basis_leaves = []
+#         for i1, l1 in enumerate(leaves):
+#             if i1 == N_basis:
+#                 arr = jnp.ones(jnp.shape(l1))
+#                 basis_leaves.append(arr/jnp.sqrt(jnp.size(arr)))
+#             else:
+#                 arr = jnp.zeros(jnp.shape(l1))
+#                 basis_leaves.append(arr)
+#         pytree_basis.append(jtu.tree_unflatten(structure, basis_leaves))
+#     return pytree_basis
+
+
+
+def _get_leaf_with_one(i, start, zero_leaf):
+    local_idx = i - start
+    leaf = zero_leaf.flatten()
+    leaf = leaf.at[local_idx].set(1.0)
+    leaf = leaf.reshape(jnp.shape(zero_leaf))
+    return leaf
+
+
+def _get_leaf_with_zeros(i, start, zero_leaf):
+    return zero_leaf
+
+
+
 def _orthonormal_basis_for_pytree(pytree: PyTree[Array]) -> list[PyTree[Array]]:
-    """Creates a list with orthonormal basis "vectors" for a given pytree shape, 
-    where the individual leafs are treated as dimensions. Such that e.g. tree_dot(basis_i, basis_j)=δ_ij.
+    """Creates a list with orthonormal basis "vectors" for a given pytree shape.
 
-    **Arguments**:
+     **Arguments**:
 
-    - `pytree`: A pytree such that the output of `_orthonormal_basis_for_pytree` is a list of orthonormal 
-    pytrees of the same structure as `pytree`.
+     - `pytree`: A pytree such that the output of `_orthonormal_basis_for_pytree` is a list of orthonormal 
+     pytrees of the same structure as `pytree`.
 
-    **Returns**:
-    A list of basis-pytrees which span the current pytree-space.
-    """
-    leaves, structure = jtu.tree_flatten(pytree)
+     **Returns**:
+     A list of basis-pytrees which span the current pytree-space.
+     """
+    
+    leaves, treedef = jax.tree.flatten(pytree)
+
+    flat_elements = jnp.concatenate([leaf.flatten() for leaf in leaves])
+    n_elements = len(flat_elements)
+
+    zero_leaves = [0*leaf for leaf in leaves]
+
+    leaf_sizes = [leaf.size for leaf in leaves]
+    cumulative_sizes = jnp.cumsum(jnp.array([0] + leaf_sizes))
+
     pytree_basis = []
-    for N_basis in range(len(leaves)):
+    for i in range(n_elements):
         basis_leaves = []
-        for i1, l1 in enumerate(leaves):
-            if i1 == N_basis:
-                arr = jnp.ones(jnp.shape(l1))
-                basis_leaves.append(arr/jnp.sqrt(jnp.size(arr)))
-            else:
-                arr = jnp.zeros(jnp.shape(l1))
-                basis_leaves.append(arr)
-        pytree_basis.append(jtu.tree_unflatten(structure, basis_leaves))
+        for j, (start, end) in enumerate(zip(cumulative_sizes[:-1], cumulative_sizes[1:])):
+            get_one = ((start <= i ) & (i < end))
+            leaf = jax.lax.cond(get_one, 
+                                _get_leaf_with_one, 
+                                _get_leaf_with_zeros, 
+                                i, start, zero_leaves[j])
+            basis_leaves.append(leaf)
+
+        pytree_basis.append(jax.tree.unflatten(treedef, basis_leaves))
     return pytree_basis
+
 
 
 
@@ -98,6 +150,7 @@ class _AbstractSecant(AbstractRootFinder[Y, Out, Aux, _SecantState]):
         tags: frozenset[object],
     ) -> _SecantState:
         
+        # idk how to handle weak_type differences between y0 and y1, so i came up with this
         y1 = jax.tree.map(lambda x: jnp.asarray(x), options.get("y1"))
         y = jax.tree.map(lambda x: jnp.asarray(x, dtype=x.dtype), y)
         y1 = jax.tree.map(lambda x: jnp.asarray(x, dtype=x.dtype), y1)
@@ -111,7 +164,10 @@ class _AbstractSecant(AbstractRootFinder[Y, Out, Aux, _SecantState]):
         pytree_basis = _orthonormal_basis_for_pytree(y)
         
         f_eval, aux = fn(y, args)
-        J_init = (0 * _outer(f_eval, pytree_basis[0])**ω).ω # creates a pytree with all zeros in the shape of the jacobian
+
+        # creates a pytree with all zeros in the shape of the jacobian
+        J_init = _outer(f_eval, pytree_basis[0])
+        J_init = jax.tree.map(lambda leaf: 0*leaf, J_init)
 
         diff_y = (y**ω - y1**ω).ω
         dtype = tree_dtype(f_struct)
@@ -148,7 +204,8 @@ class _AbstractSecant(AbstractRootFinder[Y, Out, Aux, _SecantState]):
         f_vals = [fn((y**ω + diff_y_norm*I.mv(basis)**ω).ω, args)[0] for basis in pytree_basis]
         f_vals = [(f_val**ω - f_eval**ω).ω for f_val in f_vals]
 
-        # this could be done more efficiently, here a lot of zeros are added together, because basis is mostly zeros
+        # this should be done more efficiently, here a lot of zeros are multiplied/added together, because basis is mostly zeros
+        # its done like this because i couldnt figure out a better way to assemble J_approx correctly
         for f_val, basis in zip(f_vals, pytree_basis):
             outer = _outer(f_val, basis)
             J_approx = (J_approx**ω + outer**ω).ω

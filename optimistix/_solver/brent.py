@@ -412,8 +412,8 @@ class _BrentState(eqx.Module):
 class Brent(AbstractMinimiser[Y, Aux, _BrentState]):
     """Brent's method for minimization of 1D functions. 
     Analogously to the Brent-Dekker method in root-finding, this algorithm combines two algorithms (Golden-Section-Search and SPI's method) 
-    in order to obtain guaranteed convergence with a superlinear convergence rate. Each iteration the algorithm attempts SPI's method. 
-    If this fails the algorithm falls back to Golden-Section-Search.
+    in order to obtain guaranteed convergence with a superlinear convergence rate. Each iteration the algorithm attempts SPI, 
+    if this fails the algorithm falls back to Golden-Section-Search.
 
     
     Requires the following `options`:
@@ -438,7 +438,7 @@ class Brent(AbstractMinimiser[Y, Aux, _BrentState]):
         tags: frozenset[object],
     ) -> _BrentState:
         
-        y1, y2 = jnp.asarray(options.get("lower"), dtype=float), jnp.asarray(options.get("upper"), dtype=float)
+        y1, y2 = jnp.asarray(options.get("lower"), f_struct.dtype), jnp.asarray(options.get("upper"), f_struct.dtype)
 
         if jnp.shape(y) != () or jnp.shape(y1) != () or jnp.shape(y2) != ():
             raise ValueError(
@@ -494,7 +494,6 @@ class Brent(AbstractMinimiser[Y, Aux, _BrentState]):
         SPI_not_usable = out_of_bounds | (1-steps_getting_smaller) | (1-e_big_enough)
 
         y_gss = y2 + (y1-y2)/phi
-        #y_eval = SPI_not_usable*y_gss + (1-SPI_not_usable)*y_spi
         y_eval = jnp.where(SPI_not_usable, y_gss, y_spi)
         f_eval, aux_eval = fn(y_eval, args)
 

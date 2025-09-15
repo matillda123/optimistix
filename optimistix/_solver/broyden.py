@@ -43,10 +43,9 @@ def update_jacinv_good_broyden(jprev, dy, df):
     q = tree_dot(dy, jprev.mv(df))
     w = jprev.transpose().mv(dy) # is this the same as dy @ jprev? im not sure.
 
-    j = jprev.pytree
     pw = _outer(p, w)
     pw = jax.tree.map(lambda leaf: leaf/q, pw)
-    j = (j**ω + pw**ω).ω
+    j = (jprev.pytree**ω + pw**ω).ω
     return lx.PyTreeLinearOperator(j, output_structure=jax.eval_shape(lambda: dy))
 
 
@@ -56,10 +55,9 @@ def update_jacinv_bad_broyden(jprev, dy, df):
     q = tree_dot(df, df)
     w = df
 
-    j = jprev.pytree
     pw = _outer(p, w)
     pw = jax.tree.map(lambda leaf: leaf/q, pw)
-    j = (j**ω + pw**ω).ω
+    j = (jprev.pytree**ω + pw**ω).ω
     return lx.PyTreeLinearOperator(j, output_structure=jax.eval_shape(lambda: dy))
 
 
@@ -86,6 +84,7 @@ def _general_identity_pytree(pytree1, pytree2):
         jtu.tree_unflatten(eye_structure, eye_leaves), 
         jax.eval_shape(lambda: pytree1)
         )
+
 
 
 

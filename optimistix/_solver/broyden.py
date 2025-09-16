@@ -65,15 +65,15 @@ def update_jacinv_bad_broyden(jprev, dy, df):
 
 
 def _general_identity_pytree(pytree1, pytree2):
-    leaves1, structure = jtu.tree_flatten(pytree1)
-    leaves2, structure = jtu.tree_flatten(pytree2)
-    eye_structure = structure.compose(structure)
+    leaves1, structure1 = jtu.tree_flatten(pytree1)
+    leaves2, structure2 = jtu.tree_flatten(pytree2)
+    eye_structure = structure1.compose(structure2)
     eye_leaves = []
     for i1, l1 in enumerate(leaves1):
         for i2, l2 in enumerate(leaves2):
             s1=jnp.shape(l1)
             s2=jnp.shape(l2)
-            arr = jnp.zeros(jnp.shape(jnp.outer(l1,l2)))
+            arr = jnp.zeros(jnp.shape(jnp.outer(l1, l2)))
             if i1 == i2:
                 arr = jnp.fill_diagonal(arr, 1, inplace=False)
                 eye_leaves.append(arr.reshape(s1 + s2))

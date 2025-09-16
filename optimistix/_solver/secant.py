@@ -317,9 +317,7 @@ class _AbstractSecant(AbstractRootFinder[Y, Out, Aux, _SecantState]):
 class Secant(_AbstractSecant[Y, Out, Aux]):
     """A multivariate version of the Secant method. Developed by S. Robinson (https://epubs.siam.org/doi/abs/10.1137/0703057).
     Each iteration a new approximation of the Jacobian is constructed based on the location and corresponding function values of 
-    two points. However the method requires N function evaluations per iteration, where N is the dimensionality of the pytree. 
-    This means that the orthogonal directions of each leaf are not explored independently, in contrast to the original method of Robinson.
-    Thus this solver may fail for numerous problems.
+    two points. However the method requires N function evaluations per iteration, where N is the dimensionality of the function input.
 
 
     This solver requires the following `options`:

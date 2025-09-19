@@ -111,6 +111,54 @@ def _orthonormal_basis_for_pytree(pytree: PyTree[Array]) -> list[PyTree[Array]]:
 
 
 
+def _build_J_approx_naive(J_approx, f_vals, pytree_basis):
+    '''
+    Assembles a Jacobian approximate by addition of outer products between f_vals[i] and pytree_basis[i]. 
+    Is inefficient because pytree_basis is mostly zeros
+    '''
+
+    for f_val, basis in zip(f_vals, pytree_basis):
+        outer = _outer(f_val, basis)
+        J_approx = (J_approx**ω + outer**ω).ω
+    return J_approx
+
+
+
+
+def _build_J_approx(f_vals, y):
+    '''
+    Assembles an approximate jacobian by stacking f_vals into the structure of the jacobian. 
+
+    If y and f are both 1D, J is 2D. In such a case one would simply use jnp.stack. 
+    This function generalizes this to arbitrary pytrees. (i hope)
+    
+    '''
+
+    leaves_f0, structure_f = jax.tree.flatten(f_vals[0])
+    leaves_y, structure_y = jax.tree.flatten(y)
+    structure_J = structure_f.compose(structure_y) # get treedef of jacobian
+
+    leaves_f = [jax.tree.flatten(f_val)[0] for f_val in f_vals] # get all f_vals values 
+    leaves_f = list(map(list, zip(*leaves_f))) # transpose leaves_f, (N_basis, leaves_one_f) -> (leaves_one_f, N_basis)
+
+    leaf_sizes = [leaf.size for leaf in leaves_y]
+    cumulative_sizes = jnp.cumsum(jnp.array([0] + leaf_sizes)) # get size of each leaf in y
+
+    # iterate through leaves of one f_val
+    # get all f_val leaves that originate from one leaf of y
+    # jnp.asarray essentially stacks them
+    # finally they are reshaped into the correct shape
+    leaves_J = [
+        jnp.roll(jnp.asarray(leaves_f[j]), -1*cumulative_sizes[i])[0:leaf_sizes[i]].reshape(jnp.shape(leaves_f[j][i]) + jnp.shape(leaves_y[i]), order="F") 
+        for i in range(len(cumulative_sizes)-1)
+        for j in range(len(leaves_f))
+        ]
+    
+    return jax.tree.unflatten(structure_J, leaves_J)
+
+
+
+
 class _SecantState(eqx.Module, Generic[Y]):
     y1: Y
     I: Y
@@ -204,11 +252,8 @@ class _AbstractSecant(AbstractRootFinder[Y, Out, Aux, _SecantState]):
         f_vals = [fn((y**ω + diff_y_norm*I.mv(basis)**ω).ω, args)[0] for basis in pytree_basis]
         f_vals = [(f_val**ω - f_eval**ω).ω for f_val in f_vals]
 
-        # this should be done more efficiently, here a lot of zeros are multiplied/added together, because basis is mostly zeros
-        # its done like this because i couldnt figure out a better way to assemble J_approx correctly
-        for f_val, basis in zip(f_vals, pytree_basis):
-            outer = _outer(f_val, basis)
-            J_approx = (J_approx**ω + outer**ω).ω
+        #J_approx = _build_J_approx_naive(J_approx, f_vals, pytree_basis)
+        J_approx = _build_J_approx(f_vals, y)
         J_approx = ((1/diff_y_norm)*J_approx**ω).ω
 
         J = lx.PyTreeLinearOperator(J_approx, output_structure=jax.eval_shape(lambda: f_eval))
@@ -317,7 +362,9 @@ class _AbstractSecant(AbstractRootFinder[Y, Out, Aux, _SecantState]):
 class Secant(_AbstractSecant[Y, Out, Aux]):
     """A multivariate version of the Secant method. Developed by S. Robinson (https://epubs.siam.org/doi/abs/10.1137/0703057).
     Each iteration a new approximation of the Jacobian is constructed based on the location and corresponding function values of 
-    two points. However the method requires N function evaluations per iteration, where N is the dimensionality of the function input.
+    two points. This jacobian is the used as in the Newton-Raphson method. 
+    However in addition to the linear solver the method requires N function evaluations per iteration, where N is the dimensionality 
+    of the function input.
 
 
     This solver requires the following `options`:
